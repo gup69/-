@@ -15,22 +15,29 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        /* Базовый фон всегда черный, но изначально он скрыт за видео с камеры */
-        background-color: #000; 
+        /* Фон обязательно прозрачный, чтобы не перекрывать камеру */
+        background-color: transparent; 
         overflow: hidden;
       }
-      
-      /* Настраиваем плавный переход для элемента video, который генерирует AR-движок */
-      video {
-        transition: opacity 0.8s ease-in-out; 
+
+      /* Специальный слой для затемнения экрана */
+      #blackOverlay {
+        position: absolute;
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%;
+        background-color: #000;
+        /* -1 означает, что он лежит над камерой (-2), но под AR-рисунком (1) */
+        z-index: -1; 
+        opacity: 0;
+        transition: opacity 0.8s ease-in-out;
+        pointer-events: none;
       }
 
-      /* 
-         Магия здесь: когда JavaScript добавит класс 'ar-found' к тегу <body>,
-         камера плавно растворится, оставив черный фон и AR-сцену
-      */
-      body.ar-found video {
-        opacity: 0 !important;
+      /* Когда рисунок найден, затемнение плавно проявляется */
+      body.ar-found #blackOverlay {
+        opacity: 1;
       }
 
       /* Информационная панель */
@@ -51,7 +58,6 @@
         box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
         z-index: 1000;
         
-        /* Панель изначально прозрачна и не перехватывает клики */
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.8s ease-in-out;
@@ -80,30 +86,32 @@
   </head>
   <body>
     
-    <!-- Текстовая панель (вставьте сюда вашу информацию) -->
+    <!-- Слой затемнения -->
+    <div id="blackOverlay"></div>
+
+    <!-- Текстовая панель с информацией -->
     <div id="infoPanel">
       <h3>Всадник (Эпоха бронзы)</h3>
       <p>Древний петроглиф, изображающий конного воина с луком. Найден в ущелье. Возраст около 3000 лет.</p>
     </div>
 
-    <!-- Настройка AR-сцены -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" 
+    <!-- 
+      Настройка AR-сцены. 
+      Добавлены uiScanning: no; uiLoading: no; чтобы убрать значок загрузки и квадрат сканера. 
+    -->
+    <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false">
       
       <a-assets>
-        <img id="neonPetroglyph" src="./glow.png" />
+        <img id="neonPetroglyph" src="glow.png" />
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity id="target" mindar-image-target="targetIndex: 0">
-        <!-- 
-          Изображение неонового контура. 
-          Появляется точно поверх реального рисунка на скале
-        -->
         <a-image src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
@@ -113,21 +121,18 @@
       </a-entity>
     </a-scene>
 
-    <!-- Скрипт логики переключения -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#target');
         const body = document.body;
 
-        // Как только алгоритм распознает опорные точки маркера:
         target.addEventListener("targetFound", () => {
-          // Добавляем класс, запускающий CSS-анимацию затемнения камеры и показа текста
+          // Рисунок найден — запускаем анимацию затемнения фона и показа текста
           body.classList.add('ar-found');
         });
 
-        // Если отвести телефон от рисунка:
         target.addEventListener("targetLost", () => {
-          // Убираем класс — камера снова плавно появляется
+          // Рисунок потерян — возвращаем реальную камеру
           body.classList.remove('ar-found');
         });
       });
