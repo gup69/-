@@ -1,379 +1,137 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Petroglyph AR Optical Scanner</title>
-  
-  <!-- Подключение OpenCV.js (WebAssembly) -->
-  <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #000;
-      font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
-    }
-
-    #viewport {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    /* Видеопоток камеры */
-    video {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 1;
-    }
-
-    /* Холст с наложением светящихся контуров */
-    #overlayCanvas {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 2;
-      pointer-events: none;
-      mix-blend-mode: screen; /* Придает свечению оптическую яркость */
-    }
-
-    /* Скрытый холст для вычислений OpenCV */
-    #processingCanvas {
-      display: none;
-    }
-
-    /* Футуристичный интерфейс видоискателя */
-    .hud {
-      position: absolute;
-      inset: 0;
-      z-index: 10;
-      pointer-events: none;
-      border: 16px solid transparent;
-    }
-
-    .reticle {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 220px;
-      height: 220px;
-      border: 1px dashed rgba(0, 240, 255, 0.4);
-      border-radius: 12px;
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
-    }
-    .reticle::after {
-      content: '';
-      position: absolute;
-      top: 50%; left: 50%;
-      width: 8px; height: 8px;
-      background: #00f0ff;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      box-shadow: 0 0 8px #00f0ff;
-    }
-
-    .hud-top {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      right: 20px;
-      display: flex;
-      justify-content: space-between;
-      color: #00f0ff;
-      font-family: monospace;
-      font-size: 12px;
-      text-shadow: 0 0 5px rgba(0, 240, 255, 0.8);
-    }
-
-    /* Панель управления */
-    .controls-panel {
-      position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      width: 90%;
-      max-width: 440px;
-      background: rgba(10, 15, 24, 0.85);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(0, 240, 255, 0.3);
-      border-radius: 16px;
-      padding: 14px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    }
-
-    .control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: #fff;
-      font-size: 13px;
-    }
-
-    .control-row label {
-      color: #8be9fd;
-      font-family: monospace;
-    }
-
-    input[type="range"] {
-      width: 60%;
-      accent-color: #00f0ff;
-    }
-
-    .color-presets {
-      display: flex;
-      gap: 12px;
-    }
-
-    .color-btn {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      cursor: pointer;
-    }
-
-    /* Окно загрузки OpenCV */
-    #loader {
-      position: absolute;
-      inset: 0;
-      background: #0d1117;
-      z-index: 100;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      color: #00f0ff;
-      font-family: monospace;
-      gap: 15px;
-    }
-    .spinner {
-      width: 45px;
-      height: 45px;
-      border: 4px solid rgba(0, 240, 255, 0.2);
-      border-top-color: #00f0ff;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
-</head>
-<body>
-
-  <div id="viewport">
-    <div id="loader">
-      <div class="spinner"></div>
-      <div id="loaderText">Инициализация CV-модулей...</div>
-    </div>
-
-    <video id="videoElement" playsinline autoplay muted></video>
-    <canvas id="overlayCanvas"></canvas>
-    <canvas id="processingCanvas"></canvas>
-
-    <div class="hud">
-      <div class="hud-top">
-        <span>SCANNER // AR_SPECTRAL_v2</span>
-        <span id="fpsMeter">FPS: --</span>
-      </div>
-      <div class="reticle"></div>
-    </div>
-
-    <div class="controls-panel">
-      <div class="control-row">
-        <label for="threshSlider">Порог рельефа:</label>
-        <input type="range" id="threshSlider" min="20" max="180" value="85" />
-      </div>
-      <div class="control-row">
-        <label for="filterSlider">Фильтр шума камня:</label>
-        <input type="range" id="filterSlider" min="20" max="500" value="100" />
-      </div>
-      <div class="control-row">
-        <label>Цвет контура:</label>
-        <div class="color-presets">
-          <div class="color-btn" style="background: #00f0ff;" onclick="setColor('#00f0ff')"></div>
-          <div class="color-btn" style="background: #ffb700;" onclick="setColor('#ffb700')"></div>
-          <div class="color-btn" style="background: #39ff14;" onclick="setColor('#39ff14')"></div>
-          <div class="color-btn" style="background: #ff0077;" onclick="setColor('#ff0077')"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const video = document.getElementById('videoElement');
-    const overlay = document.getElementById('overlayCanvas');
-    const procCanvas = document.getElementById('processingCanvas');
-    const loader = document.getElementById('loader');
-    const loaderText = document.getElementById('loaderText');
-    const fpsMeter = document.getElementById('fpsMeter');
-
-    const threshSlider = document.getElementById('threshSlider');
-    const filterSlider = document.getElementById('filterSlider');
-
-    let ctxOverlay = overlay.getContext('2d');
-    let ctxProc = procCanvas.getContext('2d');
-
-    let glowColor = '#00f0ff';
-    let isOpenCvReady = false;
-    let stream = null;
-
-    // Вычислительные матрицы OpenCV
-    let src, gray, blurred, edges, contours, hierarchy;
-    let lastTime = performance.now();
-    let frameCount = 0;
-
-    function setColor(color) {
-      glowColor = color;
-    }
-
-    // 1. Ожидание загрузки OpenCV.js
-    function checkOpenCvReady() {
-      if (typeof cv !== 'undefined' && cv.Mat) {
-        loaderText.innerText = "Подключение камеры...";
-        initCamera();
-      } else {
-        setTimeout(checkOpenCvReady, 200);
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8">
+    <title>Petroglyph AR - Smart Scanner</title>
+    
+    <!-- Подключаем A-Frame и MindAR -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        /* Базовый фон всегда черный, но изначально он скрыт за видео с камеры */
+        background-color: #000; 
+        overflow: hidden;
       }
-    }
-    checkOpenCvReady();
+      
+      /* Настраиваем плавный переход для элемента video, который генерирует AR-движок */
+      video {
+        transition: opacity 0.8s ease-in-out; 
+      }
 
-    // 2. Инициализация камеры смартфона (основная тыловая камера)
-    async function initCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
+      /* 
+         Магия здесь: когда JavaScript добавит класс 'ar-found' к тегу <body>,
+         камера плавно растворится, оставив черный фон и AR-сцену
+      */
+      body.ar-found video {
+        opacity: 0 !important;
+      }
+
+      /* Информационная панель */
+      #infoPanel {
+        position: absolute;
+        bottom: 10%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80%;
+        max-width: 400px;
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid #00f0ff;
+        border-radius: 12px;
+        padding: 16px;
+        color: #00f0ff;
+        font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+        z-index: 1000;
+        
+        /* Панель изначально прозрачна и не перехватывает клики */
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.8s ease-in-out;
+      }
+      
+      /* Когда рисунок найден, плавно проявляем текст */
+      body.ar-found #infoPanel {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #infoPanel h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.3rem;
+        text-shadow: 0 0 8px #00f0ff;
+        letter-spacing: 1px;
+      }
+      
+      #infoPanel p {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: #e0ffff;
+      }
+    </style>
+  </head>
+  <body>
+    
+    <!-- Текстовая панель (вставьте сюда вашу информацию) -->
+    <div id="infoPanel">
+      <h3>Всадник (Эпоха бронзы)</h3>
+      <p>Древний петроглиф, изображающий конного воина с луком. Найден в ущелье. Возраст около 3000 лет.</p>
+    </div>
+
+    <!-- Настройка AR-сцены -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
+      
+      <a-assets>
+        <img id="neonPetroglyph" src="./glow.png" />
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity id="target" mindar-image-target="targetIndex: 0">
+        <!-- 
+          Изображение неонового контура. 
+          Появляется точно поверх реального рисунка на скале
+        -->
+        <a-image src="#neonPetroglyph" 
+                 position="0 0 0" 
+                 height="1" 
+                 width="1" 
+                 material="transparent: true; blending: additive; opacity: 1;">
+        </a-image>
+      </a-entity>
+    </a-scene>
+
+    <!-- Скрипт логики переключения -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const target = document.querySelector('#target');
+        const body = document.body;
+
+        // Как только алгоритм распознает опорные точки маркера:
+        target.addEventListener("targetFound", () => {
+          // Добавляем класс, запускающий CSS-анимацию затемнения камеры и показа текста
+          body.classList.add('ar-found');
         });
 
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          setupCanvases();
-          initOpenCvBuffers();
-          loader.style.display = 'none';
-          requestAnimationFrame(processLoop);
-        };
-      } catch (err) {
-        loaderText.innerHTML = `<span style="color:#ff4444;">Ошибка камеры: ${err.message}<br>Запустите через HTTPS!</span>`;
-      }
-    }
-
-    function setupCanvases() {
-      overlay.width = video.videoWidth;
-      overlay.height = video.videoHeight;
-      
-      // Для максимальной частоты кадров вычисления ведем на оптимизированном разрешении
-      procCanvas.width = 640;
-      procCanvas.height = Math.round(640 * (video.videoHeight / video.videoWidth));
-    }
-
-    function initOpenCvBuffers() {
-      src = new cv.Mat(procCanvas.height, procCanvas.width, cv.CV_8UC4);
-      gray = new cv.Mat(procCanvas.height, procCanvas.width, cv.CV_8UC1);
-      blurred = new cv.Mat(procCanvas.height, procCanvas.width, cv.CV_8UC1);
-      edges = new cv.Mat(procCanvas.height, procCanvas.width, cv.CV_8UC1);
-      contours = new cv.MatVector();
-      hierarchy = new cv.Mat();
-      isOpenCvReady = true;
-    }
-
-    // 3. Основной конвейер оцифровки и отрисовки свечения
-    function processLoop(timestamp) {
-      // Подсчет FPS
-      frameCount++;
-      if (timestamp - lastTime >= 1000) {
-        fpsMeter.innerText = `FPS: ${frameCount}`;
-        frameCount = 0;
-        lastTime = timestamp;
-      }
-
-      if (video.readyState === video.HAVE_ENOUGH_DATA && isOpenCvReady) {
-        // Отрисовка текущего кадра на скрытый холст
-        ctxProc.drawImage(video, 0, 0, procCanvas.width, procCanvas.height);
-        let imgData = ctxProc.getImageData(0, 0, procCanvas.width, procCanvas.height);
-        src.data.set(imgData.data);
-
-        // Преобразование в градации серого
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-        // Подавление текстурного микрошума камня (Gaussian Blur)
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 1.4);
-
-        // Детекция границ канавок и рисунка (Canny)
-        let t1 = parseInt(threshSlider.value);
-        let t2 = t1 * 2;
-        cv.Canny(blurred, edges, t1, t2, 3, false);
-
-        // Поиск связных контуров выбитых фигур
-        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-        // Очистка слоя дополненной реальности
-        ctxOverlay.clearRect(0, 0, overlay.width, overlay.height);
-
-        // Параметры неонового свечения
-        ctxOverlay.lineWidth = 3.5;
-        ctxOverlay.strokeStyle = glowColor;
-        ctxOverlay.shadowColor = glowColor;
-        ctxOverlay.shadowBlur = 18;
-        ctxOverlay.lineCap = 'round';
-        ctxOverlay.lineJoin = 'round';
-
-        let scaleX = overlay.width / procCanvas.width;
-        let scaleY = overlay.height / procCanvas.height;
-        let minArea = parseInt(filterSlider.value);
-
-        // Отрисовка светящихся векторных линий
-        for (let i = 0; i < contours.size(); ++i) {
-          let cnt = contours.get(i);
-          let area = cv.contourArea(cnt);
-
-          // Игнорируем мелкие сколы/песчинки и внешние рамки экрана
-          if (area > minArea && area < (procCanvas.width * procCanvas.height * 0.7)) {
-            ctxOverlay.beginPath();
-            for (let j = 0; j < cnt.rows; ++j) {
-              let x = cnt.data32S[j * 2] * scaleX;
-              let y = cnt.data32S[j * 2 + 1] * scaleY;
-              if (j === 0) {
-                ctxOverlay.moveTo(x, y);
-              } else {
-                ctxOverlay.lineTo(x, y);
-              }
-            }
-            ctxOverlay.closePath();
-            ctxOverlay.stroke();
-          }
-        }
-      }
-
-      requestAnimationFrame(processLoop);
-    }
-  </script>
-</body>
+        // Если отвести телефон от рисунка:
+        target.addEventListener("targetLost", () => {
+          // Убираем класс — камера снова плавно появляется
+          body.classList.remove('ar-found');
+        });
+      });
+    </script>
+  </body>
+</html>
 </html>
