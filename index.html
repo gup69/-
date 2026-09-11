@@ -3,7 +3,7 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Smart Scanner</title>
+    <title>Petroglyph AR - Fire Scanner</title>
     
     <!-- Подключаем A-Frame и MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -15,12 +15,11 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        /* Фон обязательно прозрачный, чтобы не перекрывать камеру */
         background-color: transparent; 
         overflow: hidden;
       }
 
-      /* Специальный слой для затемнения экрана */
+      /* Слой для плавного затемнения реального мира */
       #blackOverlay {
         position: absolute;
         top: 0; 
@@ -28,14 +27,12 @@
         width: 100%; 
         height: 100%;
         background-color: #000;
-        /* -1 означает, что он лежит над камерой (-2), но под AR-рисунком (1) */
         z-index: -1; 
         opacity: 0;
         transition: opacity 0.8s ease-in-out;
         pointer-events: none;
       }
 
-      /* Когда рисунок найден, затемнение плавно проявляется */
       body.ar-found #blackOverlay {
         opacity: 1;
       }
@@ -46,16 +43,16 @@
         bottom: 10%;
         left: 50%;
         transform: translateX(-50%);
-        width: 80%;
-        max-width: 400px;
-        background: rgba(0, 0, 0, 0.85);
-        border: 1px solid #00f0ff;
+        width: 90%;
+        max-width: 450px;
+        background: rgba(15, 10, 5, 0.85); /* Слегка теплый оттенок фона под огонь */
+        border: 1px solid #ff5500;
         border-radius: 12px;
         padding: 16px;
-        color: #00f0ff;
+        color: #ffaa00;
         font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
         text-align: center;
-        box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+        box-shadow: 0 0 20px rgba(255, 85, 0, 0.3);
         z-index: 1000;
         
         opacity: 0;
@@ -63,7 +60,6 @@
         transition: opacity 0.8s ease-in-out;
       }
       
-      /* Когда рисунок найден, плавно проявляем текст */
       body.ar-found #infoPanel {
         opacity: 1;
         pointer-events: auto;
@@ -72,32 +68,31 @@
       #infoPanel h3 {
         margin: 0 0 8px 0;
         font-size: 1.3rem;
-        text-shadow: 0 0 8px #00f0ff;
+        text-shadow: 0 0 8px #ff5500;
         letter-spacing: 1px;
+        color: #fff;
       }
       
       #infoPanel p {
         margin: 0;
         font-size: 0.95rem;
         line-height: 1.5;
-        color: #e0ffff;
+        color: #ffddaa;
       }
     </style>
   </head>
   <body>
     
-    <!-- Слой затемнения -->
+    <!-- Затемняющий экран -->
     <div id="blackOverlay"></div>
 
-    <!-- Текстовая панель с информацией -->
+    <!-- Текстовая панель (цвета интерфейса изменены под огненный стиль) -->
     <div id="infoPanel">
-      <h3>На территории Туркестанской области найдено немало свидетельств пребывания человека в этой местности еще во времена древнекаменного века (палеолита). Они имеются практически во всех районах. Только в Байдибекском районе было найдено свыше 20 стоянок со множеством орудий труда, остатков кострищ и т.д. Имеются памятники эпохи бронзы и андроновской культуры.</h3>
-      </div>
+      <h3>Всадник (Эпоха бронзы)</h3>
+      <p>Древний петроглиф, выбитый на скале. Возраст около 3000 лет. Символизирует связь воина солярного культа и его коня.</p>
+    </div>
 
-    <!-- 
-      Настройка AR-сцены. 
-      Добавлены uiScanning: no; uiLoading: no; чтобы убрать значок загрузки и квадрат сканера. 
-    -->
+    <!-- AR-сцена (без квадратов загрузки и сканирования) -->
     <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
@@ -111,12 +106,23 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity id="target" mindar-image-target="targetIndex: 0">
+        
+        <!-- 
+          Изображение с эффектом горения:
+          1. color="#ff5500" - окрашивает картинку в огненно-оранжевый.
+          2. animation__flicker - заставляет яркость скакать как у пламени.
+          3. animation__scale - создает микропульсацию контура.
+        -->
         <a-image src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
                  width="1" 
-                 material="transparent: true; blending: additive; opacity: 1;">
+                 color="#ff5500"
+                 material="transparent: true; blending: additive; opacity: 1;"
+                 animation__flicker="property: material.opacity; from: 0.4; to: 1; dur: 70; dir: alternate; loop: true; easing: easeInOutQuad"
+                 animation__scale="property: scale; to: 1.02 1.02 1.02; dur: 150; dir: alternate; loop: true; easing: easeInOutSine">
         </a-image>
+
       </a-entity>
     </a-scene>
 
@@ -126,12 +132,10 @@
         const body = document.body;
 
         target.addEventListener("targetFound", () => {
-          // Рисунок найден — запускаем анимацию затемнения фона и показа текста
           body.classList.add('ar-found');
         });
 
         target.addEventListener("targetLost", () => {
-          // Рисунок потерян — возвращаем реальную камеру
           body.classList.remove('ar-found');
         });
       });
