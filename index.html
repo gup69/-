@@ -3,134 +3,121 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Perfect Glow</title>
+    <title>Petroglyph AR - Smart Scanner</title>
     
+    <!-- Подключаем A-Frame и MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
-    <!-- Умный компонент для автоматического удаления белого фона и создания идеальной текстуры -->
-    <script>
-      AFRAME.registerComponent('clean-glow', {
-        schema: {src: {type: 'string'}},
-        init: function () {
-          const el = this.el;
-          const src = this.data.src;
-          
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imgData.data;
-            
-            for (let i = 0; i < data.length; i += 4) {
-              let r = data[i], g = data[i+1], b = data[i+2];
-              
-              // Если пиксель светлый/белый (фон картинки), делаем его полностью прозрачным
-              if (r > 180 && g > 180 && b > 180) {
-                data[i+3] = 0; 
-              } else {
-                // Сам контур делаем ярко-белым для красивого свечения поверх огня
-                data[i] = 255;
-                data[i+1] = 255;
-                data[i+2] = 255;
-                data[i+3] = 255;
-              }
-            }
-            ctx.putImageData(imgData, 0, 0);
-            
-            // Создаем чистую текстуру для Three.js
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.needsUpdate = true;
-            
-            el.setAttribute('material', {
-              src: texture,
-              transparent: true,
-              blending: 'additive',
-              opacity: 1
-            });
-          };
-          img.src = src;
-        }
-      });
-    </script>
-    
     <style>
       body, html {
-        margin: 0; padding: 0;
-        width: 100%; height: 100%;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        /* Фон обязательно прозрачный, чтобы не перекрывать камеру */
         background-color: transparent; 
         overflow: hidden;
       }
 
+      /* Специальный слой для затемнения экрана */
       #blackOverlay {
-        position: absolute; top: 0; left: 0; 
-        width: 100%; height: 100%;
+        position: absolute;
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%;
         background-color: #000;
-        z-index: -1; opacity: 0;
+        /* -1 означает, что он лежит над камерой (-2), но под AR-рисунком (1) */
+        z-index: -1; 
+        opacity: 0;
         transition: opacity 0.8s ease-in-out;
         pointer-events: none;
       }
 
-      body.ar-found #blackOverlay { opacity: 1; }
+      /* Когда рисунок найден, затемнение плавно проявляется */
+      body.ar-found #blackOverlay {
+        opacity: 1;
+      }
 
+      /* Информационная панель */
       #infoPanel {
-        position: absolute; bottom: 10%; left: 50%;
+        position: absolute;
+        bottom: 10%;
+        left: 50%;
         transform: translateX(-50%);
-        width: 90%; max-width: 450px;
-        background: rgba(15, 10, 5, 0.85); 
-        border: 1px solid #ff5500; border-radius: 12px;
-        padding: 16px; color: #ffaa00;
-        font-family: 'Segoe UI', sans-serif; text-align: center;
-        box-shadow: 0 0 20px rgba(255, 85, 0, 0.3);
+        width: 80%;
+        max-width: 400px;
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid #00f0ff;
+        border-radius: 12px;
+        padding: 16px;
+        color: #00f0ff;
+        font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
         z-index: 1000;
-        opacity: 0; pointer-events: none;
+        
+        opacity: 0;
+        pointer-events: none;
         transition: opacity 0.8s ease-in-out;
       }
       
-      body.ar-found #infoPanel { opacity: 1; pointer-events: auto; }
-      #infoPanel h3 { margin: 0 0 8px 0; font-size: 1.3rem; text-shadow: 0 0 8px #ff5500; color: #fff; }
-      #infoPanel p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: #ffddaa; }
+      /* Когда рисунок найден, плавно проявляем текст */
+      body.ar-found #infoPanel {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #infoPanel h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.3rem;
+        text-shadow: 0 0 8px #00f0ff;
+        letter-spacing: 1px;
+      }
+      
+      #infoPanel p {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: #e0ffff;
+      }
     </style>
   </head>
   <body>
+    
+    <!-- Слой затемнения -->
     <div id="blackOverlay"></div>
+
+    <!-- Текстовая панель с информацией -->
     <div id="infoPanel">
       <h3>Всадник (Эпоха бронзы)</h3>
-      <p>Древний петроглиф, выбитый на скале. Символизирует связь воина солярного культа и его коня.</p>
+      <p>Древний петроглиф, изображающий конного воина с луком. Найден в ущелье. Возраст около 3000 лет.</p>
     </div>
 
+    <!-- 
+      Настройка AR-сцены. 
+      Добавлены uiScanning: no; uiLoading: no; чтобы убрать значок загрузки и квадрат сканера. 
+    -->
     <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
-             color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
       
       <a-assets>
-        <video id="fireVideo" src="fire.mp4" loop muted playsinline crossorigin="anonymous"></video>
+        <img id="neonPetroglyph" src="glow.png" />
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity id="target" mindar-image-target="targetIndex: 0">
-        
-        <!-- СЛОЙ 1: Видео с огнем на заднем плане -->
-        <a-video src="#fireVideo" 
-                 position="0 0 -0.03" 
-                 scale="1.15 1.15 1.15"
-                 material="transparent: true; blending: additive; opacity: 0.85;">
-        </a-video>
-
-        <!-- СЛОЙ 2: Наш компонент clean-glow автоматически уберет белый фон и сделает контур идеальным -->
-        <a-image clean-glow="src: glow.png" 
+        <a-image src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
-                 width="1">
+                 width="1" 
+                 material="transparent: true; blending: additive; opacity: 1;">
         </a-image>
-
       </a-entity>
     </a-scene>
 
@@ -138,18 +125,15 @@
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#target');
         const body = document.body;
-        const fireVid = document.querySelector('#fireVideo');
-
-        fireVid.load();
 
         target.addEventListener("targetFound", () => {
+          // Рисунок найден — запускаем анимацию затемнения фона и показа текста
           body.classList.add('ar-found');
-          fireVid.play();
         });
 
         target.addEventListener("targetLost", () => {
+          // Рисунок потерян — возвращаем реальную камеру
           body.classList.remove('ar-found');
-          fireVid.pause();
         });
       });
     </script>
