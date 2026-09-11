@@ -3,29 +3,40 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Fire & Glow</title>
+    <title>Petroglyph AR - Fire Mask</title>
     
-    <!-- Подключаем A-Frame и MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
+    <!-- Наш кастомный скрипт для вырезания огня по контуру -->
+    <script>
+      AFRAME.registerComponent('fire-mask', {
+        init: function () {
+          let mesh = this.el.getObject3D('mesh');
+          let textureLoader = new THREE.TextureLoader();
+          
+          // Загружаем нашу черно-белую картинку как трафарет
+          textureLoader.load('mask.jpg', function(texture) {
+            mesh.material.alphaMap = texture;
+            mesh.material.alphaTest = 0.1; // Отсекаем черный фон маски
+            mesh.material.transparent = true;
+            mesh.material.needsUpdate = true;
+          });
+        }
+      });
+    </script>
+    
     <style>
       body, html {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
+        margin: 0; padding: 0;
+        width: 100%; height: 100%;
         background-color: transparent; 
         overflow: hidden;
       }
 
-      /* Слой для плавного затемнения реального мира */
       #blackOverlay {
-        position: absolute;
-        top: 0; 
-        left: 0; 
-        width: 100%; 
-        height: 100%;
+        position: absolute; top: 0; left: 0; 
+        width: 100%; height: 100%;
         background-color: #000;
         z-index: -1; 
         opacity: 0;
@@ -33,122 +44,73 @@
         pointer-events: none;
       }
 
-      body.ar-found #blackOverlay {
-        opacity: 1;
-      }
+      body.ar-found #blackOverlay { opacity: 1; }
 
-      /* Информационная панель */
       #infoPanel {
-        position: absolute;
-        bottom: 10%;
-        left: 50%;
+        position: absolute; bottom: 10%; left: 50%;
         transform: translateX(-50%);
-        width: 90%;
-        max-width: 450px;
+        width: 90%; max-width: 450px;
         background: rgba(15, 10, 5, 0.85); 
-        border: 1px solid #ff5500;
-        border-radius: 12px;
-        padding: 16px;
-        color: #ffaa00;
-        font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
-        text-align: center;
+        border: 1px solid #ff5500; border-radius: 12px;
+        padding: 16px; color: #ffaa00;
+        font-family: 'Segoe UI', sans-serif; text-align: center;
         box-shadow: 0 0 20px rgba(255, 85, 0, 0.3);
         z-index: 1000;
-        
-        opacity: 0;
-        pointer-events: none;
+        opacity: 0; pointer-events: none;
         transition: opacity 0.8s ease-in-out;
       }
       
-      body.ar-found #infoPanel {
-        opacity: 1;
-        pointer-events: auto;
-      }
-
-      #infoPanel h3 {
-        margin: 0 0 8px 0;
-        font-size: 1.3rem;
-        text-shadow: 0 0 8px #ff5500;
-        letter-spacing: 1px;
-        color: #fff;
-      }
-      
-      #infoPanel p {
-        margin: 0;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        color: #ffddaa;
-      }
+      body.ar-found #infoPanel { opacity: 1; pointer-events: auto; }
+      #infoPanel h3 { margin: 0 0 8px 0; font-size: 1.3rem; text-shadow: 0 0 8px #ff5500; color: #fff; }
+      #infoPanel p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: #ffddaa; }
     </style>
   </head>
   <body>
-    
-    <!-- Затемняющий экран -->
     <div id="blackOverlay"></div>
-
-    <!-- Текстовая панель -->
     <div id="infoPanel">
       <h3>Всадник (Эпоха бронзы)</h3>
       <p>Древний петроглиф, выбитый на скале. Символизирует связь воина солярного культа и его коня.</p>
     </div>
 
-    <!-- Настройка сцены (интерфейс сканирования скрыт) -->
     <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
-             color-space="sRGB" 
-             renderer="colorManagement: true, physicallyCorrectLights" 
-             vr-mode-ui="enabled: false" 
-             device-orientation-permission-ui="enabled: false">
+             color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       
-      <!-- РАЗДЕЛ АССЕТОВ: загружаем и видео с огнем, и картинку с контуром -->
       <a-assets>
-        <img id="neonPetroglyph" src="glow.png" />
         <video id="fireVideo" src="fire.mp4" loop muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- ПРИВЯЗКА К МАРКЕРУ -->
       <a-entity id="target" mindar-image-target="targetIndex: 0">
         
-        <!-- Слой 1 (Фон): Видео с огнем.
-             Уведено по оси Z немного назад (-0.05) и увеличено в масштабе (1.2) -->
+        <!-- Теперь у нас только один слой с видео, к которому применяется наш атрибут fire-mask -->
         <a-video src="#fireVideo" 
-                 position="0 0 -0.05" 
-                 scale="1.2 1.2 1.2"
-                 material="transparent: true; blending: additive; opacity: 1;">
-        </a-video>
-
-        <!-- Слой 2 (Передний план): Картинка с петроглифом.
-             Находится строго в координате Z=0, поэтому отображается ПОВЕРХ огня -->
-        <a-image src="#neonPetroglyph" 
+                 fire-mask
                  position="0 0 0" 
                  height="1" 
                  width="1" 
-                 material="transparent: true; blending: additive; opacity: 1;">
-        </a-image>
+                 material="blending: additive;">
+        </a-video>
 
       </a-entity>
     </a-scene>
 
-    <!-- Скрипт логики включения/выключения -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#target');
         const body = document.body;
         const fireVid = document.querySelector('#fireVideo');
 
-        // Подгружаем видео заранее в кэш
         fireVid.load();
 
         target.addEventListener("targetFound", () => {
           body.classList.add('ar-found');
-          // Включаем видео с огнем
           fireVid.play();
         });
 
         target.addEventListener("targetLost", () => {
           body.classList.remove('ar-found');
-          // Останавливаем видео, когда маркер потерян, чтобы беречь ресурсы телефона
           fireVid.pause();
         });
       });
