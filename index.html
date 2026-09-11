@@ -3,7 +3,7 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Real Fire Video</title>
+    <title>Petroglyph AR - Fire & Glow</title>
     
     <!-- Подключаем A-Frame и MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -92,54 +92,63 @@
       <p>Древний петроглиф, выбитый на скале. Символизирует связь воина солярного культа и его коня.</p>
     </div>
 
+    <!-- Настройка сцены (интерфейс сканирования скрыт) -->
     <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false">
       
-      <!-- Раздел ассетов: загружаем наше видео -->
+      <!-- РАЗДЕЛ АССЕТОВ: загружаем и видео с огнем, и картинку с контуром -->
       <a-assets>
-        <!-- 
-          Важно: muted и playsinline обязательны! 
-          Без них мобильные браузеры (особенно Safari на iPhone) заблокируют автозапуск видео.
-        -->
+        <img id="neonPetroglyph" src="glow.png" />
         <video id="fireVideo" src="fire.mp4" loop muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
+      <!-- ПРИВЯЗКА К МАРКЕРУ -->
       <a-entity id="target" mindar-image-target="targetIndex: 0">
         
-        <!-- Заменяем a-image на a-video. blending: additive уберет черный фон -->
+        <!-- Слой 1 (Фон): Видео с огнем.
+             Уведено по оси Z немного назад (-0.05) и увеличено в масштабе (1.2) -->
         <a-video src="#fireVideo" 
+                 position="0 0 -0.05" 
+                 scale="1.2 1.2 1.2"
+                 material="transparent: true; blending: additive; opacity: 1;">
+        </a-video>
+
+        <!-- Слой 2 (Передний план): Картинка с петроглифом.
+             Находится строго в координате Z=0, поэтому отображается ПОВЕРХ огня -->
+        <a-image src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
                  width="1" 
                  material="transparent: true; blending: additive; opacity: 1;">
-        </a-video>
+        </a-image>
 
       </a-entity>
     </a-scene>
 
+    <!-- Скрипт логики включения/выключения -->
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#target');
         const body = document.body;
         const fireVid = document.querySelector('#fireVideo');
 
-        // Подгружаем видео заранее
+        // Подгружаем видео заранее в кэш
         fireVid.load();
 
         target.addEventListener("targetFound", () => {
           body.classList.add('ar-found');
-          // Запускаем воспроизведение огня только когда маркер найден
+          // Включаем видео с огнем
           fireVid.play();
         });
 
         target.addEventListener("targetLost", () => {
           body.classList.remove('ar-found');
-          // Ставим на паузу при потере маркера, чтобы не сажать батарею телефона
+          // Останавливаем видео, когда маркер потерян, чтобы беречь ресурсы телефона
           fireVid.pause();
         });
       });
