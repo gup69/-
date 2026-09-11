@@ -65,23 +65,21 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity id="target" mindar-image-target="targetIndex: 0">
+     <a-entity id="target" mindar-image-target="targetIndex: 0">
         
-        <!-- СЛОЙ 1 (Фон): Видео с огнем. Чуть позади и чуть шире (scale 1.15) -->
+        <!-- СЛОЙ 1: Видео с огнем на заднем плане -->
         <a-video src="#fireVideo" 
-                 position="0 0 -0.02" 
+                 position="0 0 -0.03" 
                  scale="1.15 1.15 1.15"
-                 material="transparent: true; blending: additive; opacity: 0.8;">
+                 material="transparent: true; blending: normal; opacity: 0.85;">
         </a-video>
 
-        <!-- СЛОЙ 2 (Передний план): Четкий белый контур с огненным оттенком и живым дыханием -->
+        <!-- СЛОЙ 2: Четкий белый контур петроглифа поверх огня -->
         <a-image src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
                  width="1" 
-                 color="#ffaa44"
-                 material="transparent: true; blending: additive; opacity: 1;"
-                 animation__pulse="property: scale; from: 0.99 0.99 0.99; to: 1.01 1.01 1.01; dur: 800; dir: alternate; loop: true; easing: easeInOutSine">
+                 material="transparent: true; opacity: 1;">
         </a-image>
 
       </a-entity>
