@@ -3,7 +3,7 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Fire Scanner</title>
+    <title>Petroglyph AR - Real Fire Video</title>
     
     <!-- Подключаем A-Frame и MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -45,7 +45,7 @@
         transform: translateX(-50%);
         width: 90%;
         max-width: 450px;
-        background: rgba(15, 10, 5, 0.85); /* Слегка теплый оттенок фона под огонь */
+        background: rgba(15, 10, 5, 0.85); 
         border: 1px solid #ff5500;
         border-radius: 12px;
         padding: 16px;
@@ -86,42 +86,38 @@
     <!-- Затемняющий экран -->
     <div id="blackOverlay"></div>
 
-    <!-- Текстовая панель (цвета интерфейса изменены под огненный стиль) -->
+    <!-- Текстовая панель -->
     <div id="infoPanel">
       <h3>Всадник (Эпоха бронзы)</h3>
-      <p>Древний петроглиф, выбитый на скале. Возраст около 3000 лет. Символизирует связь воина солярного культа и его коня.</p>
+      <p>Древний петроглиф, выбитый на скале. Символизирует связь воина солярного культа и его коня.</p>
     </div>
 
-    <!-- AR-сцена (без квадратов загрузки и сканирования) -->
     <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
              device-orientation-permission-ui="enabled: false">
       
+      <!-- Раздел ассетов: загружаем наше видео -->
       <a-assets>
-        <img id="neonPetroglyph" src="glow.png" />
+        <!-- 
+          Важно: muted и playsinline обязательны! 
+          Без них мобильные браузеры (особенно Safari на iPhone) заблокируют автозапуск видео.
+        -->
+        <video id="fireVideo" src="fire.mp4" loop muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity id="target" mindar-image-target="targetIndex: 0">
         
-        <!-- 
-          Изображение с эффектом горения:
-          1. color="#ff5500" - окрашивает картинку в огненно-оранжевый.
-          2. animation__flicker - заставляет яркость скакать как у пламени.
-          3. animation__scale - создает микропульсацию контура.
-        -->
-        <a-image src="#neonPetroglyph" 
+        <!-- Заменяем a-image на a-video. blending: additive уберет черный фон -->
+        <a-video src="#fireVideo" 
                  position="0 0 0" 
                  height="1" 
                  width="1" 
-                 color="#ff5500"
-                 material="transparent: true; blending: additive;"
-                 animation__flicker="property: opacity; from: 0.3; to: 1; dur: 180; dir: alternate; loop: true; easing: easeInOutSine"
-                 animation__pulse="property: scale; from: 0.98 0.98 0.98; to: 1.03 1.03 1.03; dur: 600; dir: alternate; loop: true; easing: easeInOutSine">
-        </a-image>
+                 material="transparent: true; blending: additive; opacity: 1;">
+        </a-video>
 
       </a-entity>
     </a-scene>
@@ -130,13 +126,21 @@
       document.addEventListener("DOMContentLoaded", function() {
         const target = document.querySelector('#target');
         const body = document.body;
+        const fireVid = document.querySelector('#fireVideo');
+
+        // Подгружаем видео заранее
+        fireVid.load();
 
         target.addEventListener("targetFound", () => {
           body.classList.add('ar-found');
+          // Запускаем воспроизведение огня только когда маркер найден
+          fireVid.play();
         });
 
         target.addEventListener("targetLost", () => {
           body.classList.remove('ar-found');
+          // Ставим на паузу при потере маркера, чтобы не сажать батарею телефона
+          fireVid.pause();
         });
       });
     </script>
