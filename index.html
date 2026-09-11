@@ -3,7 +3,7 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8">
-    <title>Petroglyph AR - Fire & Sharp Glow</title>
+    <title>Petroglyph AR - Clean Fire</title>
     
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
@@ -58,24 +58,25 @@
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       
       <a-assets>
-        <!-- Используем нашу новую белую картинку -->
-        <img id="neonPetroglyph" src="glow.png" />
+        <!-- Картинка загружается с crossorigin для обработки скриптом -->
+        <img id="neonPetroglyph" src="glow.png" crossorigin="anonymous" />
         <video id="fireVideo" src="fire.mp4" loop muted playsinline crossorigin="anonymous"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <a-entity id="target" mindar-image-target="targetIndex: 0">
         
-        <!-- СЛОЙ 1: Видео с огнем на заднем плане -->
+        <!-- Огонь на заднем плане -->
         <a-video src="#fireVideo" 
                  position="0 0 -0.03" 
                  scale="1.15 1.15 1.15"
                  material="transparent: true; blending: additive; opacity: 0.85;">
         </a-video>
 
-        <!-- СЛОЙ 2: Белый контур с включенным additive, который мгновенно сожрет любой черный фон -->
-        <a-image src="#neonPetroglyph" 
+        <!-- Петроглиф на переднем плане -->
+        <a-image id="petroImage" 
+                 src="#neonPetroglyph" 
                  position="0 0 0" 
                  height="1" 
                  width="1" 
@@ -90,8 +91,37 @@
         const target = document.querySelector('#target');
         const body = document.body;
         const fireVid = document.querySelector('#fireVideo');
+        const imgElement = document.querySelector('#neonPetroglyph');
 
         fireVid.load();
+
+        // АВТОМАТИЧЕСКОЕ УДАЛЕНИЕ ЧЕРНОГО ФОНА С КАРТИНКИ
+        function removeBlackBackground() {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgElement.naturalWidth || 512;
+          canvas.height = imgElement.naturalHeight || 512;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgElement, 0, 0);
+          
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imgData.data;
+          
+          for (let i = 0; i < data.length; i += 4) {
+            let r = data[i], g = data[i+1], b = data[i+2];
+            // Если пиксель темный/черный (фон), делаем его полностью прозрачным
+            if (r < 30 && g < 30 && b < 30) {
+              data[i+3] = 0; 
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+          imgElement.src = canvas.toDataURL('image/png');
+        }
+
+        if (imgElement.complete) {
+          removeBlackBackground();
+        } else {
+          imgElement.onload = removeBlackBackground;
+        }
 
         target.addEventListener("targetFound", () => {
           body.classList.add('ar-found');
